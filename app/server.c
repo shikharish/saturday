@@ -87,6 +87,8 @@ int main() {
 				"text/plain\r\nContent-Length: %lu\r\n\r\n%s",
 				strlen(str), str);
 		resp = resp_echo;
+	} else if (strcmp(path, "/") == 0) {
+		resp = resp_ok;
 	} else {
 		resp = resp_not_found;
 	}
