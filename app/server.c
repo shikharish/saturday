@@ -8,6 +8,7 @@
 #include <string.h>
 #include <sys/socket.h>
 #include <unistd.h>
+#include <zlib.h>
 
 #define BUF_SIZE 1024
 
@@ -15,6 +16,25 @@ const char *resp_ok = "HTTP/1.1 200 OK\r\n\r\n";
 const char *resp_not_found = "HTTP/1.1 404 Not Found\r\n\r\n";
 int server_fd;
 char *directory;
+int gzip_encoded = 0;
+
+// https://stackoverflow.com/a/57699371/7292958
+int gzip(const char *input, int inputSize, char *output, int outputSize) {
+	z_stream zs;
+	zs.zalloc = Z_NULL;
+	zs.zfree = Z_NULL;
+	zs.opaque = Z_NULL;
+	zs.avail_in = (uInt)inputSize;
+	zs.next_in = (Bytef *)input;
+	zs.avail_out = (uInt)outputSize;
+	zs.next_out = (Bytef *)output;
+
+	deflateInit2(&zs, Z_DEFAULT_COMPRESSION, Z_DEFLATED, 15 | 16, 8,
+				 Z_DEFAULT_STRATEGY);
+	deflate(&zs, Z_FINISH);
+	deflateEnd(&zs);
+	return zs.total_out;
+}
 
 void *handle_reqs(void *fd) {
 	int client_fd = *((int *)fd);
@@ -79,7 +99,9 @@ void *handle_reqs(void *fd) {
 		resp = resp_user_agent;
 		printf("%s\n", resp);
 	} else if (strstr(path, "/echo/")) {
-		char *str = strtok(path, "/");
+		char *str = malloc(strlen(path));
+		strcpy(str, path);
+		str = strtok(str, "/");
 		str = strtok(NULL, "/");
 
 		char resp_echo[BUF_SIZE] = {0};
@@ -91,17 +113,16 @@ void *handle_reqs(void *fd) {
 					"%lu\r\n\r\n%s",
 					strlen(str), str);
 		} else {
-			encoding = strtok(encoding, " ");
-			encoding = strtok(NULL, ",");
-			while (strstr(encoding, "gzip") == NULL) {
-				encoding = strtok(NULL, ",");
-				encoding++;
-			}
+			gzip_encoded = 1;
+			char *encoded = (char *)malloc(BUF_SIZE);
+			size_t gzip_len = gzip(str, strlen(str), encoded, BUF_SIZE);
 			sprintf(resp_echo,
 					"HTTP/1.1 200 OK\r\nContent-Type: "
-					"text/plain\r\nContent-Encoding: %s\r\nContent-Length: "
-					"%lu\r\n\r\n%s",
-					encoding, strlen(str), str);
+					"text/plain\r\nContent-Encoding: gzip\r\nContent-Length: "
+					"%lu\r\n\r\n",
+					gzip_len);
+			send(client_fd, resp_echo, strlen(resp_echo), 0);
+			send(client_fd, encoded, gzip_len, 0);
 		}
 		resp = resp_echo;
 	} else if (strcmp(path, "/") == 0) {
@@ -110,10 +131,12 @@ void *handle_reqs(void *fd) {
 		resp = resp_not_found;
 	}
 
-	if (send(client_fd, resp, strlen(resp), 0) < 0) {
-		printf("send response failed\n");
-		goto error;
-	}
+	if (!gzip_encoded)
+		if (send(client_fd, resp, strlen(resp), 0) < 0) {
+			printf("send response failed\n");
+			goto error;
+		}
+	gzip_encoded = 0;
 	return NULL;
 
 error:
