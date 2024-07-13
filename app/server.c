@@ -81,11 +81,24 @@ void *handle_reqs(void *fd) {
 	} else if (strstr(path, "/echo/")) {
 		char *str = strtok(path, "/");
 		str = strtok(NULL, "/");
+		printf("%s\n", str);
+
 		char resp_echo[BUF_SIZE] = {0};
-		sprintf(resp_echo,
-				"HTTP/1.1 200 OK\r\nContent-Type: "
-				"text/plain\r\nContent-Length: %lu\r\n\r\n%s",
-				strlen(str), str);
+		char *encoding = strstr(req_buf, "Accept-Encoding:");
+		if (encoding == NULL || strstr(encoding, "gzip") == NULL) {
+			sprintf(resp_echo,
+					"HTTP/1.1 200 OK\r\nContent-Type: "
+					"text/plain\r\nContent-Length: "
+					"%lu\r\n\r\n%s",
+					strlen(str), str);
+		} else {
+			encoding += 17;
+			sprintf(resp_echo,
+					"HTTP/1.1 200 OK\r\nContent-Type: "
+					"text/plain\r\nContent-Encoding: %s\r\nContent-Length: "
+					"%lu\r\n\r\n%s",
+					encoding, strlen(str), str);
+		}
 		resp = resp_echo;
 	} else if (strcmp(path, "/") == 0) {
 		resp = resp_ok;
