@@ -75,8 +75,21 @@ int main() {
 
 	char *path = strtok(req_buf, " ");
 	path = strtok(NULL, " ");
+	printf("path = %s\n", path);
 
-	char *resp = !strcmp(path, "/") ? resp_ok : resp_not_found;
+	char *resp = NULL;
+	if (strstr(path, "/echo/")) {
+		char *str = strtok(path, "/");
+		str = strtok(NULL, "/");
+		char resp_echo[BUF_SIZE] = {0};
+		sprintf(resp_echo,
+				"HTTP/1.1 200 OK\r\nContent-Type: "
+				"text/plain\r\nContent-Length: %lu\r\n\r\n%s",
+				strlen(str), str);
+		resp = resp_echo;
+	} else {
+		resp = resp_not_found;
+	}
 
 	if (send(client_fd, resp, strlen(resp), 0) < 0) {
 		printf("send response failed\n");
