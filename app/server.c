@@ -26,6 +26,8 @@ void *handle_reqs(void *fd) {
 
 	char *tmp = strdup(req_buf);
 	char *path = strtok(tmp, " ");
+	char method[10] = {0};
+	strcpy(method, path);
 	path = strtok(NULL, " ");
 
 	const char *resp = NULL;
@@ -34,20 +36,36 @@ void *handle_reqs(void *fd) {
 		filename = strtok(NULL, "/");
 		char file_path[BUF_SIZE] = {0};
 		sprintf(file_path, "%s%s", directory, filename);
-		int fide = open(file_path, O_RDONLY);
-		if (fide > 0) {
-			char resp_file[BUF_SIZE] = {0};
-			char file_contents[BUF_SIZE] = {0};
-			ssize_t bytes_read =
-				read(fide, file_contents, sizeof(file_contents));
-			sprintf(resp_file,
-					"HTTP/1.1 200 OK\r\nContent-Type: "
-					"application/octet-stream\r\nContent-Length: "
-					"%lu\r\n\r\n%s\r\n\r\n",
-					bytes_read, file_contents);
-			resp = resp_file;
+		if (strcmp(method, "GET") == 0) {
+			int fide = open(file_path, O_RDONLY);
+			if (fide > 0) {
+				char resp_file[BUF_SIZE] = {0};
+				char file_contents[BUF_SIZE] = {0};
+				ssize_t bytes_read =
+					read(fide, file_contents, sizeof(file_contents));
+				sprintf(resp_file,
+						"HTTP/1.1 200 OK\r\nContent-Type: "
+						"application/octet-stream\r\nContent-Length: "
+						"%lu\r\n\r\n%s\r\n\r\n",
+						bytes_read, file_contents);
+				resp = resp_file;
+			} else {
+				resp = resp_not_found;
+			}
 		} else {
-			resp = resp_not_found;
+			int fide = open(file_path, O_CREAT | O_WRONLY);
+			char file_contents[BUF_SIZE] = {0};
+			char *tmp = strtok(req_buf, "\r\n");
+			while (1) {
+				tmp = strtok(NULL, "\r\n");
+				if (tmp == NULL)
+					break;
+				strcpy(file_contents, tmp);
+			}
+			ssize_t bytes_written =
+				write(fide, file_contents, strlen(file_contents));
+			char resp_file[BUF_SIZE] = "HTTP/1.1 201 Created\r\n\r\n";
+			resp = resp_file;
 		}
 	} else if (strstr(path, "/user-agent")) {
 		char *user_agent = strstr(req_buf, "User-Agent");
