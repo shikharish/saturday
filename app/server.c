@@ -1,4 +1,5 @@
 #include <errno.h>
+#include <fcntl.h>
 #include <netinet/in.h>
 #include <netinet/ip.h>
 #include <pthread.h>
@@ -13,6 +14,7 @@
 const char *resp_ok = "HTTP/1.1 200 OK\r\n\r\n";
 const char *resp_not_found = "HTTP/1.1 404 Not Found\r\n\r\n";
 int server_fd;
+char *directory;
 
 void *handle_reqs(void *fd) {
 	int client_fd = *((int *)fd);
@@ -27,7 +29,27 @@ void *handle_reqs(void *fd) {
 	path = strtok(NULL, " ");
 
 	const char *resp = NULL;
-	if (strstr(path, "/user-agent")) {
+	if (strstr(path, "/files/")) {
+		char *filename = strtok(path, "/");
+		filename = strtok(NULL, "/");
+		char file_path[BUF_SIZE] = {0};
+		sprintf(file_path, "%s%s", directory, filename);
+		int fide = open(file_path, O_RDONLY);
+		if (fide > 0) {
+			char resp_file[BUF_SIZE] = {0};
+			char file_contents[BUF_SIZE] = {0};
+			ssize_t bytes_read =
+				read(fide, file_contents, sizeof(file_contents));
+			sprintf(resp_file,
+					"HTTP/1.1 200 OK\r\nContent-Type: "
+					"application/octet-stream\r\nContent-Length: "
+					"%lu\r\n\r\n%s\r\n\r\n",
+					bytes_read, file_contents);
+			resp = resp_file;
+		} else {
+			resp = resp_not_found;
+		}
+	} else if (strstr(path, "/user-agent")) {
 		char *user_agent = strstr(req_buf, "User-Agent");
 		printf("%s\n", user_agent);
 		user_agent += 12;
@@ -64,7 +86,14 @@ error:
 	return NULL;
 }
 
-int main() {
+int main(int argc, char **argv) {
+
+	for (int i = 0; i < argc; i++) {
+		if (strcmp(argv[i], "--directory") == 0) {
+			directory = argv[i + 1];
+		}
+	}
+
 	// Disable output buffering
 	setbuf(stdout, NULL);
 	setbuf(stderr, NULL);
