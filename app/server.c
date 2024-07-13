@@ -73,12 +73,23 @@ int main() {
 		goto error;
 	}
 
-	char *path = strtok(req_buf, " ");
+	char *tmp = strdup(req_buf);
+	char *path = strtok(tmp, " ");
 	path = strtok(NULL, " ");
-	printf("path = %s\n", path);
 
 	char *resp = NULL;
-	if (strstr(path, "/echo/")) {
+	if (strstr(path, "/user-agent")) {
+		char *user_agent = strstr(req_buf, "User-Agent");
+		printf("%s\n", user_agent);
+		user_agent += 12;
+		char resp_user_agent[BUF_SIZE] = {0};
+		sprintf(resp_user_agent,
+				"HTTP/1.1 200 OK\r\nContent-Type: "
+				"text/plain\r\nContent-Length: %lu\r\n\r\n%s",
+				strlen(user_agent) - 4, user_agent);
+		resp = resp_user_agent;
+		printf("%s\n", resp);
+	} else if (strstr(path, "/echo/")) {
 		char *str = strtok(path, "/");
 		str = strtok(NULL, "/");
 		char resp_echo[BUF_SIZE] = {0};
